@@ -1,54 +1,59 @@
 version: "3.7"
 
-volumes:
-  postgresql_data:
-    driver: local
+networks:
+  tech-day-network:
+    external: true
 
 services:
-  postgresql:
-    container_name: postgresql-dotlib
-    image: docker.io/bitnami/postgresql:11
-    environment:
-      - ALLOW_EMPTY_PASSWORD=yes
-      - POSTGRESQL_USERNAME=bn_keycloak
-      - POSTGRESQL_DATABASE=bitnami_keycloak
-    volumes:
-      - postgresql_data:/bitnami/postgresql
-
   keycloak:
-    container_name: keycloak-dotlib
-    image: docker.io/bitnami/keycloak:latest
+    container_name: tech-day-keycloak
+    image: quay.io/keycloak/keycloak:12.0.4
     ports:
-      - "8080:8080"
+      - 8080:8080
     environment:
       - KEYCLOAK_USER=admin
       - KEYCLOAK_PASSWORD=admin
-    depends_on:
-      - postgresql
+    networks:
+      - tech-day-network
 
-  mysql:
-    container_name: mysql-dotlib
+  database:
+    container_name: tech-day-database
     image: mysql:5.7
     volumes:
-      - ./database:/var/lib/mysql
-    environment:
-      - MYSQL_DATABASE=app1_database
-      - MYSQL_ROOT_PASSWORD=root
+      - $HOME/docker-databases/docker-database:/var/lib/mysql
     ports:
       - 3306:3306
+    networks:
+      - tech-day-network
 
-  myapp1:
-    container_name: myapp1-dotlib
-    tty: true
-    image: docker.io/bitnami/laravel:8-debian-10
-    environment:
-      - DB_HOST=mysql-dotlib
-      - DB_DATABASE=app1_database
-      - DB_USERNAME=root
-      - DB_PASSWORD=root
-    depends_on:
-      - mysql
-    ports:
-      - 3000:3000
+  app:
+    container_name: tech-day-php
+    image: docker-php
+    build:
+      args:
+        user: dotlib
+        uid: 1000
+      context: ./
+      dockerfile: docker/app/app.dockerfile
+    restart: unless-stopped
+    working_dir: /var/www/
     volumes:
-      - ./app1:/app
+      - ./app-php:/var/www
+    depends_on:
+      - nginx
+    networks:
+      - tech-day-network
+
+  nginx:
+    image: nginx:alpine
+    container_name: tech-day-nginx
+    restart: unless-stopped
+    ports:
+      - 8000:80
+    volumes:
+      - ./app-php:/var/www
+      - ./docker/nginx:/etc/nginx/conf.d/
+    depends_on:
+      - database
+    networks:
+      - tech-day-network
