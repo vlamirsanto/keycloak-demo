@@ -1,0 +1,10 @@
+{
+  "realm": "dotlib",
+  "auth-server-url": "http://localhost:8080/auth/",
+  "ssl-required": "external",
+  "resource": "app-node",
+  "credentials": {
+    "secret": "cf37c63e-551f-4ed1-a550-deb05fdb9381"
+  },
+  "confidential-port": 0
+}

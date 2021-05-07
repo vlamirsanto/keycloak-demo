@@ -1,46 +1,55 @@
-const Keycloak = require('keycloak-connect');
-const hogan = require('hogan-express');
-const express = require('express');
-const session = require('express-session');
-const jwt = require('jsonwebtoken')
+var Keycloak = require('keycloak-connect');
+var hogan = require('hogan-express');
+var express = require('express');
+var session = require('express-session');
 
-const app = express();
+var app = express();
 
-const server = app.listen(3000, function () {
-  const host = server.address().address;
-  const port = server.address().port;
+var server = app.listen(3000, function () {
+  var host = server.address().address;
+  var port = server.address().port;
   console.log('Example app listening at http://%s:%s', host, port);
 });
 
+// Register '.mustache' extension with The Mustache Express
 app.set('view engine', 'html');
-app.set('views', require('path').join(__dirname, '/views'));
+app.set('views', require('path').join(__dirname, '/view'));
 app.engine('html', hogan);
 
-app.get('/', function (_, res) {
+// A normal un-protected public URL.
+app.get('/', function (req, res) {
   res.render('index');
 });
 
-const memoryStore = new session.MemoryStore();
+// Create a session-store to be used by both the express-session
+// middleware and the keycloak middleware.
+var memoryStore = new session.MemoryStore();
 
 app.use(session({
   secret: 'mySecret',
   resave: false,
   saveUninitialized: true,
-  store: memoryStore,
+  store: memoryStore
 }));
 
-const keycloak = new Keycloak({
-    store: memoryStore,
-  },
-  {
-    "realm": 'tech-day',
-    "realm-public-key" : "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAksb5+4MDfPSSOqJG9Mmdb3GoqpfZK+RPrMnmRcVNKuNwKSSEMkyZGHNE4glZNQqV4z+iLffBba4ywKDCanv8fv8xue5hAGEH4pAX9c4FOYvl5alK2xpYah4eOzBt02Rfn5eMzrkRa84Hwm1ESH64eIlFZBWDQjwXrIpXx4xxqmNUbPz/Qj4M4vXQELFtoI+GhBlJgYGJtgxxYFfi6RHuskm5tm+vZt6+MoD9MjUtqPKE4ib8Gt/H+rBAcb16GlLVxNFeM+GMWms6UyOWzujjokhPSwQoWsGeHAxOmbQtaseVl0zu8oi4qZcy9sxrzhH4aTuDwiRv2nNo6QUVWfedcQIDAQAB",
-    "auth-server-url" : "http://localhost:8080/auth",
-    "ssl-required" : "external",
-    "resource" : 'app-node',
-    "public-client" : true
-  }
-);
+// Provide the session store to the Keycloak so that sessions
+// can be invalidated from the Keycloak console callback.
+//
+// Additional configuration is read from keycloak.json file
+// installed from the Keycloak web console.
+
+var keycloak = new Keycloak({
+  store: memoryStore
+});
+
+// Install the Keycloak middleware.
+//
+// Specifies that the user-accessible application URL to
+// logout should be mounted at /logout
+//
+// Specifies that Keycloak console callbacks should target the
+// root URL.  Various permutations, such as /k_logout will ultimately
+// be appended to the admin URL.
 
 app.use(keycloak.middleware({
   logout: '/logout',
@@ -49,22 +58,20 @@ app.use(keycloak.middleware({
 }));
 
 app.get('/login', keycloak.protect(), function (req, res) {
-  // const token = JSON.stringify(JSON.parse(req.session['keycloak-token']), null, 4);
-  const token = JSON.parse(req.session['keycloak-token']);
-
   res.render('index', {
-    result: JSON.stringify(token, null, 4),
-    event: '1. Authentication\n2. Login',
-    decode: jwt.decode(token.id_token, {complete: true}),
+    result: JSON.stringify(JSON.parse(req.session['keycloak-token']), null, 4),
+    event: '1. Authentication\n2. Login'
   });
 });
 
-app.get('/protected/resource', keycloak.enforcer(['resource:view', 'resource:write'], {
-  resource_server_id: 'nodejs-apiserver'
-}), function (req, res) {
-  console.log(res);
-  res.render('index', {
-    result: JSON.stringify(JSON.parse(req.session['keycloak-token']), null, 4),
-    event: '1. Access granted to Default Resource\n'
-  });
+app.get('/anonymous', function(req, res){
+  res.send("Hello Anonymous");
+});
+
+app.get('/protected/developer', keycloak.protect('developer'), function(req, res){
+  res.send("Hello Developer");
+});
+
+app.get('/protected/marketing', keycloak.protect('marketing'), function(req, res){
+  res.send("Hello Marketing");
 });
